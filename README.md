@@ -2,7 +2,7 @@
 
 > **Disclaimer:** This tool is provided ‘as-is’ without any warranty or support. Use of it is at your own risk and I accept no responsibility for any damage caused.
 
-Team Request App is a Microsoft Teams app that allows users to request a new Team through a managed, controlled process (compared to the standard process in Teams). 
+Team Request App is a Microsoft Teams app that allows users to request a new Team through a managed, controlled process (compared to the standard process in Teams).
 
 ![image](https://user-images.githubusercontent.com/472320/129489661-92019858-1764-4979-9684-0bc2b02ebe66.png)
 
@@ -17,6 +17,8 @@ This app allows the following when requesting a Team:
 When a Team is requested, the app will attempt to provision the Team and the user can see the status of this and previous requests:
 
 ![image](https://user-images.githubusercontent.com/472320/129489827-f6dc507f-a1f8-429a-8010-248c6b9b5a14.png)
+
+A video example of the whole process can be found [here](https://youtu.be/2Mm995G8Ubs)
 
 # Getting started
 Firstly, read the [Solution overview](https://github.com/leeford/team-request-app/wiki/Solution-overview) to get a handle of the different components that make up the tool, what it does and how it works.
