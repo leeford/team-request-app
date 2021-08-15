@@ -1,0 +1,99 @@
+name: Check PR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2.1.5
+        with:
+          node-version: 14
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Clean install dependencies and build
+        run: |
+          cd ./webApp
+          npm ci
+          npm run build
+
+      - name: Zip up Web App
+        run: |
+          cd ./webApp
+          zip -r ../deployment/webApp.zip * -x './src/*'
+
+      - name: Zip up build artifact
+        run: zip -r build.zip * -x './webApp/*'
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build.zip
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: build
+
+      - name: Unzip build artifact
+        run: unzip build.zip && rm build.zip
+
+      - name: Login via Az module
+        uses: azure/login@v1
+        with:
+          creds: ${{secrets.AZURE_CREDENTIALS}}
+          enable-AzPSSession: true
+
+      - name: Create RG
+        uses: Azure/CLI@v1
+        with:
+          inlineScript: |
+            #!/bin/bash
+            if $(az group exists --name ${{ secrets.RESOURCE_GROUP_NAME }}) ; then
+              echo "Azure resource group already exists, skipping creation..."
+            else
+              az group create --name ${{ secrets.RESOURCE_GROUP_NAME }} --location ${{ secrets.RESOURCE_GROUP_LOCATION }}
+              echo "Azure resource group created"
+            fi
+
+      - name: Deploy to Azure
+        uses: azure/arm-deploy@main
+        id: arm-deploy
+        with:
+          resourceGroupName: ${{ secrets.RESOURCE_GROUP_NAME }}
+          template: ./deployment/deploymentTemplate.json
+          parameters: appClientId=${{ secrets.APP_CLIENT_ID }}
+            appTenantId=${{ secrets.APP_TENANT_ID }}
+            azureResourcePrefix=${{ secrets.AZURE_RESOURCE_PREFIX }}
+
+      - name: Deploy Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ steps.arm-deploy.outputs.webAppName }}
+          package: ./deployment/webApp.zip
+
+      - name: "Post Deployment Steps"
+        uses: azure/powershell@v1
+        with:
+          inlineScript: |
+            Import-Module ./deployment/helperScripts/addIpRules.psm1
+            Import-Module ./deployment/helperScripts/addAppRoles.psm1
+            Add-AppRoles -PrincipalId ${{ steps.arm-deploy.outputs.managedIdentityPrincipalId }}
+            Add-IPRules -WebAppOutboundIPAddresses "${{ steps.arm-deploy.outputs.webAppOutboundIPAddresses }}" -KeyVaultName ${{ steps.arm-deploy.outputs.keyVaultName }} -CosmosDbAccountName ${{ steps.arm-deploy.outputs.cosmosDbAccountName }} -ResourceGroup ${{ secrets.RESOURCE_GROUP_NAME }}
+          azPSVersion: "latest"

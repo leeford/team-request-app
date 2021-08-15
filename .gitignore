@@ -1,0 +1,8 @@
+node_modules
+.env
+dist
+.vscode
+deploymentTemplate.parameters_*.json
+team-request-app-v*.zip
+webApp.zip
+teamsApp.zip
