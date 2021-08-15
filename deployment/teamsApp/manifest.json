@@ -1,0 +1,47 @@
+{
+    "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.9/MicrosoftTeams.schema.json",
+    "manifestVersion": "1.9",
+    "version": "1.0.0",
+    "showLoadingIndicator": true,
+    "id": "512c90c8-25ad-4fe6-959f-e5060d2293b8",
+    "packageName": "io.github.leeford.team-request-app",
+    "developer": {
+        "name": "Lee Ford",
+        "websiteUrl": "https://www.github.com/leeford/team-request-app",
+        "privacyUrl": "https://www.github.com/leeford/team-request-app",
+        "termsOfUseUrl": "https://www.github.com/leeford/team-request-app"
+    },
+    "icons": {
+        "color": "color.png",
+        "outline": "outline.png"
+    },
+    "name": {
+        "short": "Team Request",
+        "full": "Team Request"
+    },
+    "description": {
+        "short": "Allow users to request a Team",
+        "full": "Allow users to request a Team in Microsoft Teams"
+    },
+    "accentColor": "#48B7A3",
+    "staticTabs": [
+        {
+            "entityId": "Request",
+            "name": "Request",
+            "contentUrl": "https://<Azure Web App FQDN>/newRequest",
+            "scopes": [
+                "personal"
+            ]
+        }
+    ],
+    "permissions": [
+        "identity"
+    ],
+    "validDomains": [
+        "<Azure Web App FQDN>"
+    ],
+    "webApplicationInfo": {
+        "id": "<AAD App Client ID>",
+        "resource": "api://<Azure Web App FQDN>/<AAD App Client ID>"
+    }
+}

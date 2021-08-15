@@ -1,0 +1,359 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "appClientId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure Active Directory App ID for the app registration"
+            }
+        },
+        "appTenantId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure Active Directory Tenant ID for the app registration"
+            }
+        },
+        "appServicePlanSku": {
+            "type": "object",
+            "defaultValue": {
+                "name": "B1",
+                "tier": "Basic",
+                "size": "B1",
+                "family": "B",
+                "capacity": 1
+            },
+            "metadata": {
+                "description": "The SKU of the Web App Service Plan. Default is B1 SKU (Test workload)"
+            }
+        },
+        "keyVaultType": {
+            "type": "string",
+            "defaultValue": "standard",
+            "allowedValues": [
+                "standard",
+                "premium"
+            ],
+            "metadata": {
+                "description": "Key Vault type"
+            }
+        },
+        "azureResourcePrefix": {
+            "type": "string",
+            "maxLength": 21,
+            "metadata": {
+                "description": "Prefix added to all names of Azure resources - cannot be more than 21 chars"
+            }
+        }
+    },
+    "variables": {
+        "appInsightsName": "[toLower(concat(parameters('azureResourcePrefix'),'-insights'))]",
+        "appInsightsWorkspaceName": "[toLower(concat(parameters('azureResourcePrefix'),'-logs'))]",
+        "appServicePlanName": "[toLower(concat(parameters('azureResourcePrefix'),'-appplan'))]",
+        "cosmosDbAccountName": "[toLower(concat(parameters('azureResourcePrefix'),'-cosmos'))]",
+        "cosmosDbDatabaseName": "teamRequestApp",
+        "keyVaultName": "[toLower(concat(parameters('azureResourcePrefix'),'-kv'))]",
+        "linuxFxVersion": "NODE|14-lts",
+        "siteHost": "[concat(variables('webAppName'), '.azurewebsites.net')]",
+        "webAppName": "[toLower(concat(parameters('azureResourcePrefix'),'-webapp'))]"
+    },
+    "resources": [
+        {
+            "comments": "Create a App Service Plan",
+            "type": "Microsoft.Web/serverfarms",
+            "name": "[variables('appServicePlanName')]",
+            "apiVersion": "2020-12-01",
+            "kind": "app,linux",
+            "location": "[resourceGroup().location]",
+            "sku": "[parameters('appServicePlanSku')]",
+            "properties": {
+                "name": "[variables('appServicePlanName')]",
+                "reserved": true
+            }
+        },
+        {
+            "comments": "Create a Web App using an App Service Plan",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2020-12-01",
+            "location": "[resourceGroup().location]",
+            "kind": "app",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "[resourceId('microsoft.insights/components', variables('appInsightsName'))]"
+            ],
+            "name": "[variables('webAppName')]",
+            "resources": [
+                {
+                    "type": "config",
+                    "name": "appsettings",
+                    "apiVersion": "2020-12-01",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites', variables('webAppName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AppInsightsInstrumentationKey')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'CosmosDbDatabase')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'CosmosDbKey')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'CosmosDbUri')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AppClientId')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AppTenantId')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'WebAppFQDN')]"
+                    ],
+                    "properties": {
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AppInsightsInstrumentationKey')).secretUriWithVersion, ')')]",
+                        "SSO_CLIENT_ID": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AppClientId')).secretUriWithVersion, ')')]",
+                        "AZURE_TENANT_ID": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'AppTenantId')).secretUriWithVersion, ')')]",
+                        "CosmosDbDatabase": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'CosmosDbDatabase')).secretUriWithVersion, ')')]",
+                        "CosmosDbKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'CosmosDbKey')).secretUriWithVersion, ')')]",
+                        "CosmosDbUri": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'CosmosDbUri')).secretUriWithVersion, ')')]",
+                        "WebAppFQDN": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'WebAppFQDN')).secretUriWithVersion, ')')]",
+                        "WEBSITE_ENABLE_SYNC_UPDATE_SITE": "true",
+                        "WEBSITE_HTTPLOGGING_RETENTION_DAYS": 7,
+                        "WEBSITE_RUN_FROM_PACKAGE": 1
+                    }
+                }
+            ],
+            "properties": {
+                "name": "[variables('webAppName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "httpsOnly": true,
+                "siteConfig": {
+                    "alwaysOn": true,
+                    "linuxFxVersion": "[variables('linuxFxVersion')]",
+                    "ftpsState": "Disabled",
+                    "cors": {
+                        "allowedOrigins": []
+                    }
+                }
+            }
+        },
+        {
+            "comments": "Create App Insights Workspace",
+            "type": "microsoft.operationalinsights/workspaces",
+            "apiVersion": "2020-08-01",
+            "name": "[variables('appInsightsWorkspaceName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "sku": {
+                    "name": "pergb2018"
+                },
+                "retentionInDays": 30,
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            }
+        },
+        {
+            "comments": "Create App Insights",
+            "type": "microsoft.insights/components",
+            "apiVersion": "2020-02-02-preview",
+            "name": "[variables('appInsightsName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "Flow_Type": "Bluefield",
+                "WorkspaceResourceId": "[resourceId('microsoft.operationalinsights/workspaces', variables('appInsightsWorkspaceName'))]",
+                "IngestionMode": "LogAnalytics",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "[resourceId('microsoft.operationalinsights/workspaces', variables('appInsightsWorkspaceName'))]"
+            ]
+        },
+        {
+            "comments": "Create Cosmos DB Account",
+            "type": "Microsoft.DocumentDB/databaseAccounts",
+            "name": "[variables('cosmosDbAccountName')]",
+            "apiVersion": "2021-04-15",
+            "kind": "GlobalDocumentDB",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('webAppName'))]"
+            ],
+            "properties": {
+                "databaseAccountOfferType": "Standard",
+                "locations": [
+                    {
+                        "id": "[concat(variables('cosmosDbAccountName'), '-', resourceGroup().location)]",
+                        "failoverPriority": 0,
+                        "locationName": "[resourceGroup().location]"
+                    }
+                ],
+                "backupPolicy": {
+                    "type": "Continuous"
+                },
+                "isVirtualNetworkFilterEnabled": false,
+                "virtualNetworkRules": [],
+                "ipRules": [],
+                "dependsOn": [],
+                "capabilities": [
+                    {
+                        "name": "EnableServerless"
+                    }
+                ],
+                "enableFreeTier": false
+            }
+        },
+        {
+            "comments": "Create Comsmos DB 'SQL' database",
+            "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
+            "name": "[concat(variables('cosmosDbAccountName'), '/', variables('cosmosDbDatabaseName'))]",
+            "apiVersion": "2021-04-15",
+            "dependsOn": [
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName'))]"
+            ],
+            "properties": {
+                "resource": {
+                    "id": "[variables('cosmosDbDatabaseName')]"
+                },
+                "options": {}
+            }
+        },
+        {
+            "comments": "Create an Azure KeyVault to store secrets",
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2019-09-01",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('keyVaultName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('webAppName'))]",
+                "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('cosmosDbAccountName'), variables('cosmosDbDatabaseName'))]"
+            ],
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "[parameters('keyVaultType')]"
+                },
+                "tenantId": "[subscription().tenantid]",
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantid]",
+                        "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('webAppName')), '2019-08-01', 'full').identity.principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "get"
+                            ]
+                        }
+                    }
+                ],
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": false,
+                "enableSoftDelete": true
+            },
+            "resources": [
+                {
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "name": "AppInsightsInstrumentationKey",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]",
+                        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]"
+                    ],
+                    "properties": {
+                        "value": "[reference(concat('microsoft.insights/components/', variables('appInsightsName'))).InstrumentationKey]"
+                    }
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "name": "CosmosDbDatabase",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]",
+                        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('cosmosDbAccountName'), variables('cosmosDbDatabaseName'))]"
+                    ],
+                    "properties": {
+                        "value": "[variables('cosmosDbDatabaseName')]"
+                    }
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "name": "CosmosDbUri",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]",
+                        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('cosmosDbAccountName'), variables('cosmosDbDatabaseName'))]"
+                    ],
+                    "properties": {
+                        "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts/', variables('cosmosDbAccountName'))).documentEndpoint]"
+                    }
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "name": "CosmosDbKey",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]",
+                        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('cosmosDbAccountName'), variables('cosmosDbDatabaseName'))]"
+                    ],
+                    "properties": {
+                        "value": "[listKeys(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbAccountName')), '2020-04-01').primaryMasterKey]"
+                    }
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "name": "WebAppFQDN",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]"
+                    ],
+                    "properties": {
+                        "value": "[variables('siteHost')]"
+                    }
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "name": "AppClientId",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]"
+                    ],
+                    "properties": {
+                        "value": "[parameters('appClientId')]"
+                    }
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "name": "AppTenantId",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]"
+                    ],
+                    "properties": {
+                        "value": "[parameters('appTenantId')]"
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {
+        "cosmosDbAccountName": {
+            "type": "string",
+            "value": "[variables('cosmosDbAccountName')]"
+        },
+        "keyVaultName": {
+            "type": "string",
+            "value": "[variables('keyVaultName')]"
+        },
+        "webAppName": {
+            "type": "string",
+            "value": "[variables('webAppName')]"
+        },
+        "siteHost": {
+            "type": "string",
+            "value": "[variables('siteHost')]"
+        },
+        "webAppOutboundIPAddresses": {
+            "type": "string",
+            "value": "[reference(concat('Microsoft.Web/sites/', variables('webAppName'))).possibleOutboundIpAddresses]"
+        },
+        "managedIdentityPrincipalId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Web/sites', variables('webAppName')), '2019-08-01', 'full').identity.principalId]"
+        }
+    }
+}
