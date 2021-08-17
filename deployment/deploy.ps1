@@ -161,6 +161,18 @@ if ((Test-Path $templateFile) -and (Test-Path $parametersFile)) {
         Throw "Teams App Manifest generation failed: $($_)"
     }
 
+    # Update AD App Registration with deployed Web App FQDN
+    try {
+        Write-Message "Updating Azure AD App Registration..." -NoNewLine
+        Set-AzADApplication -ApplicationId $parametersObj.parameters.appClientId.Value -IdentifierUri "api://$($deploy.Outputs.siteHost.Value)/$($parametersObj.parameters.appClientId.Value)" | Out-Null
+        Write-Host "SUCCESS" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "FAILED" -ForegroundColor Red
+        Throw "Azure AD App registation update failed: $($_)"
+    }
+
+
     # Add Web App IPs to Key Vault and Cosmos ACL
     Add-IPRules -WebAppOutboundIPAddresses $deploy.Outputs.webAppOutboundIPAddresses.Value -KeyVaultName $deploy.Outputs.keyVaultName.Value -CosmosDbAccountName $deploy.Outputs.cosmosDbAccountName.Value -ResourceGroup $ResourceGroup
 
