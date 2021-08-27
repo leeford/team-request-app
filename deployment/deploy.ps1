@@ -40,7 +40,7 @@ function Check-ModuleInstalled {
     # Do you have module installed?
     Write-Message -Message "Checking module '$Module' installed..." -NoNewLine
 
-    if (Get-Module -ListAvailable -Name $Module) {
+    if (Get-Module -Name $Module) {
         Write-Host "INSTALLED" -ForegroundColor Green
     }
     else {
