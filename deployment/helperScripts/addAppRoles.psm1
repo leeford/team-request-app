@@ -16,30 +16,20 @@ function Add-AppRoles {
         # Get access token for Graph from signed-in user
         $accessToken = ConvertTo-SecureString -String (Get-AzAccessToken -Resource "https://graph.microsoft.com").Token -AsPlainText -Force
         # Get existing role assignments
-        $params = @{
-            Uri            = "https://graph.microsoft.com/v1.0/servicePrincipals/$PrincipalId/appRoleAssignments"
-            Authentication = "Bearer"
-            Token          = $accessToken
-            Method         = "GET"
-            ContentType    = "application/json" 
-        }
-        $existingRoles = Invoke-RestMethod @Params
+
+        $Header  = @{"Authorization" = "Bearer $((Get-AzAccessToken -Resource "https://graph.microsoft.com").Token)" }
+        $existingRoles =  Invoke-RestMethod -Method get  -Headers $Header -ContentType 'application/json' -Uri "https://graph.microsoft.com/v1.0/servicePrincipals/$PrincipalId/appRoleAssignments"
         # Add each role (if required)
         foreach ($roleId in $roleIds) {
             if ($existingRoles.value.appRoleId -notcontains $roleId) {
-                $params = @{
-                    Uri            = "https://graph.microsoft.com/v1.0/servicePrincipals/$graphResourceId/appRoleAssignedTo"
-                    Authentication = "Bearer"
-                    Token          = $accessToken
-                    Method         = "POST"
-                    ContentType    = "application/json"
-                    Body           = @{
+            
+
+                                     $Body           = @{
                         principalId = $PrincipalId
                         resourceId  = $graphResourceId
                         appRoleId   = $roleId
                     } | ConvertTo-Json
-                }
-                Invoke-RestMethod @Params | Out-Null
+                 Invoke-RestMethod -Body $body -Method POST  -Headers $Header -ContentType 'application/json' -Uri "https://graph.microsoft.com/v1.0/servicePrincipals/$graphResourceId/appRoleAssignedTo"
             }
         }
         Write-Host "SUCCESS" -ForegroundColor Green
