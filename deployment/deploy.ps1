@@ -8,9 +8,9 @@
 .DESCRIPTION
     Author: Lee Ford
 
-    This tool allows you to deploy teams-request-app. See https://www.github.com/leeford/team-request-app for more details.
+    This tool allows you to deploy team-request-app. See https://www.github.com/leeford/team-request-app for more details.
 
-    This tool has been written for PowerShell "Core" on Windows, Mac and Linux in mind - it may not work with "Windows PowerShell".
+    This tool has been written for PowerShell "Core" with Windows, Mac and Linux in mind - it may not work with "Windows PowerShell".
 
 .LINK
     Blog: https://www.lee-ford.co.uk
